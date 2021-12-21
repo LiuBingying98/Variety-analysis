@@ -1,0 +1,101 @@
+#!/usr/bin/python3
+
+import argparse
+import os
+
+
+def get_sequences(input_file):
+    all_seqs, raw_seqs = dict(), []
+    line_size, align_size = 0, 0
+    with open(input_file) as f:
+        for line in f.readlines():
+            items = line.split()
+            if len(items) != 2:
+                continue
+            seq_name, seq = items[0], items[1]
+            assert(line_size == len(seq) or line_size == 0)
+            line_size = len(seq)
+            if seq_name in all_seqs:
+                all_seqs[seq_name] += seq
+            else:
+                all_seqs[seq_name] = seq
+    # check alignment size and add to raw_seqs
+    for name in all_seqs:
+        assert(len(all_seqs[name]) == align_size or align_size == 0)
+        align_size = len(all_seqs[name])
+        raw_seqs.append(all_seqs[name])
+    return all_seqs, raw_seqs
+
+
+def get_all_occurrences(s, t):
+    res, idx = [], 0
+    while idx < len(s):
+        idx = s.find(t, idx)
+        if idx == -1:
+            break
+        res.append(idx)
+        idx += 1
+    return res
+
+
+def do_ambiguity(seq, targets, l, count):
+    results = []
+    for i, target in enumerate(targets):
+        head, tail = target, target + l
+        print("Targets[", count, "][", i, "]=",str(head) + ", " + str(tail))
+        cursors = "".join(["^" if k in range(head, tail) else " " for k in range(len(seq))])
+        LINE_SIZE = 60
+        for j in range((len(seq) + LINE_SIZE - 1) // LINE_SIZE):
+            print("\t" + seq[LINE_SIZE*j:LINE_SIZE*j+LINE_SIZE])
+            print("\t" + cursors[LINE_SIZE*j:LINE_SIZE*j+LINE_SIZE])
+    choices = [0]
+    if len(targets) > 1:
+        idxs = input("Choose target columns from 0 to " + str(len(targets)-1) + ": ")
+        choices = list(map(int, idxs.split(",")))
+    count += len(choices)
+    for c in choices:
+        results.append(targets[c])
+    return count, results
+
+
+def parse_target_columns(seq, target_col):
+    targets, i = [], 0
+    for target in target_col.split(","):
+        if target.replace("-", "") and target.replace("-", "").isnumeric():
+            assert(target.count("-") == 1)
+            head, tail = int(target.split("-")[0]), int(target.split("-")[1])
+            print("Targets[", i, "]=", seq[head : tail+1])
+            targets += list(range(head, tail + 1))
+            i += 1
+        else:
+            res = get_all_occurrences(seq, target)
+            i, res = do_ambiguity(seq, res, len(target), i)
+            for r in res:
+                targets += list(range(r, r + len(target)))
+    targets = sorted(list(dict.fromkeys(targets)))
+    return targets
+
+
+def stat(align_file, target_seq, target_col):
+    if not os.path.exists(align_file):
+        print("align_file", align_file, "does not exist!!")
+        exit(1)
+    all_seqs, raw_seqs = get_sequences(align_file)
+    # print(all_seqs)
+    assert(target_seq in all_seqs)
+    all_cols = parse_target_columns(all_seqs[target_seq], target_col)
+    # print(all_cols)
+    for col in all_cols:
+        chs = [s[col] for s in raw_seqs]
+        stats = dict((_, chs.count(_)) for _ in set(chs))
+        print("Column", col, ":", sorted(stats.items(), key=lambda kv: kv[1]))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Stat a sequence alignment file')
+    parser.add_argument('align_file', type=str, help="Input alignment file")
+    parser.add_argument('target_seq', type=str, help="Target sequence")
+    parser.add_argument('target_col', type=str, help="Target columns (by seq or index)")
+    args = parser.parse_args()
+
+    stat(args.align_file, args.target_seq, args.target_col)

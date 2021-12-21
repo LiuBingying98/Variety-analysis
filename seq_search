@@ -1,0 +1,55 @@
+#!/usr/bin/python3
+
+import argparse
+import os
+
+
+def get_sequences(input_file):
+    all_seqs = []
+    line_size = 0
+    with open(input_file) as f:
+        seq_name, seq = "", ""
+        for line in f.readlines():
+            line = line.strip()
+            if line.startswith(">"):
+                # commit last sequence
+                if seq_name != "" and seq != "":
+                    all_seqs.append((seq_name, seq))
+                seq_name, seq = line, ""
+            elif line:
+                seq += line
+                if len(line) > line_size:
+                    line_size = len(line)
+        assert(seq_name != "" and seq != "")
+        all_seqs.append((seq_name, seq))
+    return all_seqs, line_size
+
+
+def convert(input_file, pattern, output_file):
+    if not os.path.exists(input_file):
+        print("input_file", input_file, "does not exist!!")
+        exit(1)
+    all_seqs, line_size = get_sequences(input_file)
+    filtered_seqs = filter(lambda s: pattern in s[1] and len(s[1]) <= 160, all_seqs)
+    sorted_seqs = sorted(filtered_seqs, key=lambda s: s[1])
+    result_seqs, last_seq = [], ""
+    for seq in sorted_seqs:
+        if seq[1] != last_seq:
+            result_seqs.append(seq)
+            last_seq = seq[1]
+    print("Number of matched sequences:", len(result_seqs))
+    with open(output_file, "w") as f:
+        for seq in result_seqs:
+            f.write(seq[0] + "\n")
+            for i in range((len(seq[1]) + line_size - 1) // line_size):
+                f.write(seq[1][line_size*i:line_size*i+line_size] + "\n")
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Apply filter to a fasta file')
+    parser.add_argument('input_file', type=str, help="Input fasta file")
+    parser.add_argument('pattern', type=str, help="Pattern for matching")
+    parser.add_argument('output_file', type=str, help="Output fasta file")
+    args = parser.parse_args()
+
+    convert(args.input_file, args.pattern, args.output_file)
